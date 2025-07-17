@@ -14,12 +14,20 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// --- CORS CONFIGURATION ---
+const allowedOrigins = [
+  'https://rradiantrefletion.com', // Your frontend domain
+  'https://rradiant-backend.onrender.com',         // (Optional) Local dev
+];
 app.use(cors({
-  origin: process.env.API_URI || 'https://rradiant-backend.onrender.com',
+  origin: allowedOrigins,
   credentials: true,
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   allowedHeaders: 'Origin,X-Requested-With,Content-Type,Accept,Authorization'
 }));
+// --- END CORS CONFIGURATION ---
+
 app.use(express.json());
 
 // Serve uploads folder statically
@@ -52,4 +60,3 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/rrjewel')
 .catch((err) => {
   console.error('MongoDB connection error:', err);
 });
-
