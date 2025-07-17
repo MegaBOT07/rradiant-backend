@@ -15,7 +15,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 app.use(cors({
-  origin: process.env.API_URI || 'https://rradiant-backend.onrender.com/',
+  origin: process.env.API_URI || 'https://rradiant-backend.onrender.com',
   credentials: true,
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   allowedHeaders: 'Origin,X-Requested-With,Content-Type,Accept,Authorization'
