@@ -80,6 +80,22 @@ router.put('/reorder', async (req, res) => {
   }
 });
 
+// PUT update showcase video by ID
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, videoUrl, productId } = req.body;
+    const updated = await ShowcaseVideo.findByIdAndUpdate(
+      req.params.id,
+      { name, videoUrl, productId },
+      { new: true }
+    );
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // DELETE showcase video
 router.delete('/:id', async (req, res) => {
   try {
