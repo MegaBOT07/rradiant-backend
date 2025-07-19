@@ -2,28 +2,39 @@ import express from 'express';
 import ShowcaseVideo from '../models/ShowcaseVideo.js';
 import Product from '../models/Product.js';
 import multer from 'multer';
-import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import streamifier from 'streamifier';
 // import { authenticate, isAdmin } from '../middleware/auth.js'; // Uncomment if you want to protect routes
 
 const router = express.Router();
 
-// Multer setup for video uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(process.cwd(), 'uploads/showcase-videos'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  }
-});
-const upload = multer({ storage });
+// Multer setup for memory storage (buffer only)
+const upload = multer({ storage: multer.memoryStorage() });
 
-// POST /upload - upload a showcase video file
-router.post('/upload', upload.single('video'), (req, res) => {
+// Cloudinary config
+cloudinary.config({
+  cloud_name: 'Untitled',
+  api_key: 'RTmCaqWE-VY-rU3cOZNPF97lMIk',
+  api_secret: 'RTmCaqWE-VY-rU3cOZNPF97lMIk'
+});
+
+// POST /upload - upload a showcase video file to Cloudinary
+router.post('/upload', upload.single('video'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
-  const url = `/uploads/showcase-videos/${req.file.filename}`;
-  res.json({ url });
+  try {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { resource_type: 'video', folder: 'showcase-videos' },
+      (error, result) => {
+        if (error) {
+          return res.status(500).json({ error: 'Cloudinary upload error', details: error });
+        }
+        res.json({ url: result.secure_url });
+      }
+    );
+    streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // GET all showcase videos (sorted by displayOrder)

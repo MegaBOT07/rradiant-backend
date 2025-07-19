@@ -1,21 +1,20 @@
 import express from 'express';
 import Product from '../models/Product.js';
 import multer from 'multer';
-import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import streamifier from 'streamifier';
 
 const router = express.Router();
 
-// Multer setup for local uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(process.cwd(), 'uploads'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  }
+// Multer setup for memory storage (buffer only)
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Cloudinary config
+cloudinary.config({
+  cloud_name: 'Untitled',
+  api_key: 'RTmCaqWE-VY-rU3cOZNPF97lMIk',
+  api_secret: 'RTmCaqWE-VY-rU3cOZNPF97lMIk'
 });
-const upload = multer({ storage });
 
 // GET all products
 router.get('/', async (req, res) => {
@@ -88,13 +87,29 @@ router.get('/category/:category', async (req, res) => {
   }
 });
 
-// Image upload endpoint
-router.post('/upload', upload.array('images', 10), (req, res) => {
+// Image upload endpoint to Cloudinary
+router.post('/upload', upload.array('images', 10), async (req, res) => {
   if (!req.files || !Array.isArray(req.files)) {
     return res.status(400).json({ message: 'No files uploaded' });
   }
-  const urls = req.files.map(file => `/uploads/${file.filename}`);
-  res.json({ urls });
+  try {
+    const uploadPromises = req.files.map(file => {
+      return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { resource_type: 'image', folder: 'product-images' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result.secure_url);
+          }
+        );
+        streamifier.createReadStream(file.buffer).pipe(uploadStream);
+      });
+    });
+    const urls = await Promise.all(uploadPromises);
+    res.json({ urls });
+  } catch (err) {
+    res.status(500).json({ error: 'Cloudinary upload error', details: err });
+  }
 });
 
 export default router;
