@@ -13,10 +13,28 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // Cloudinary config
 cloudinary.config({
-  cloud_name: 'Untitled',
-  api_key: 'RTmCaqWE-VY-rU3cOZNPF97lMIk',
-  api_secret: 'RTmCaqWE-VY-rU3cOZNPF97lMIk'
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+// Log Cloudinary config status
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+  console.log('Cloudinary credentials loaded:', {
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET ? '***' : undefined
+  });
+  cloudinary.api.ping((error, result) => {
+    if (error) {
+      console.error('Cloudinary connection failed:', error);
+    } else {
+      console.log('Cloudinary connection successful:', result);
+    }
+  });
+} else {
+  console.error('Cloudinary credentials missing in environment variables.');
+}
 
 // POST /upload - upload a showcase video file to Cloudinary
 router.post('/upload', upload.single('video'), async (req, res) => {
