@@ -3,13 +3,30 @@ import axios from "axios";
 let shiprocketToken = null;
 
 export async function loginToShiprocket() {
-  const res = await axios.post("https://apiv2.shiprocket.in/v1/external/auth/login", {
-    email: process.env.SHIPROCKET_EMAIL,
-    password: process.env.SHIPROCKET_PASSWORD,
-  });
-
-  shiprocketToken = res.data.token;
-  return shiprocketToken;
+  try {
+    console.log('Attempting Shiprocket login with:', {
+      email: process.env.SHIPROCKET_EMAIL,
+      password: process.env.SHIPROCKET_PASSWORD ? '***' : undefined
+    });
+    const res = await axios.post("https://apiv2.shiprocket.in/v1/external/auth/login", {
+      email: process.env.SHIPROCKET_EMAIL,
+      password: process.env.SHIPROCKET_PASSWORD,
+    });
+    if (res.data && res.data.token) {
+      shiprocketToken = res.data.token;
+      console.log('Shiprocket login successful. Token received.');
+    } else {
+      console.error('Shiprocket login failed. No token received:', res.data);
+    }
+    return shiprocketToken;
+  } catch (err) {
+    if (err.response) {
+      console.error('Shiprocket login error:', err.response.data);
+    } else {
+      console.error('Shiprocket login error:', err.message);
+    }
+    throw err;
+  }
 }
 
 export function getShiprocketToken() {
