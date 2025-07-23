@@ -11,8 +11,8 @@ const router = express.Router();
 
 // Initialize Razorpay with hardcoded credentials for testing
 const razorpay = new Razorpay({
-  key_id: 'rzp_test_cCdkMWV7ovJG9X', 
-  key_secret: 'lieKSVzf23A7WQYfrqC4P4IP', 
+  key_id: process.env.RAZORPAY_KEY_ID, 
+  key_secret: process.env.RAZORPAY_KEY_SECRET, 
 });
 console.log('Razorpay instance initialized with hardcoded credentials.');
 
@@ -146,7 +146,7 @@ router.post('/verify', authenticate, async (req, res) => {
   console.log('Received at /verify:', req.body);
 
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, cart, totalAmount, customerDetails } = req.body;
-  const secret = 'lieKSVzf23A7WQYfrqC4P4IP';
+  const secret = process.env.RAZORPAY_KEY_SECRET;
 
   const shasum = crypto.createHmac('sha256', secret);
   shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
