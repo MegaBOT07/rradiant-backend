@@ -8,9 +8,14 @@ export async function loginToShiprocket() {
       email: process.env.SHIPROCKET_EMAIL,
       password: process.env.SHIPROCKET_PASSWORD ? '***' : undefined
     });
+    // Using specific API endpoint for API user authentication
     const res = await axios.post("https://apiv2.shiprocket.in/v1/external/auth/login", {
       email: process.env.SHIPROCKET_EMAIL,
       password: process.env.SHIPROCKET_PASSWORD,
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
     if (res.data && res.data.token) {
       shiprocketToken = res.data.token;
@@ -40,6 +45,13 @@ export async function createShiprocketOrder(orderData) {
     // First verify the token by getting account details
     console.log('Verifying Shiprocket account access...');
     try {
+      // Try to get channel details first (this should work for all accounts)
+      const channelRes = await axios.get("https://apiv2.shiprocket.in/v1/external/channels", {
+        headers: { Authorization: `Bearer ${shiprocketToken}` }
+      });
+      console.log('Channel verification successful:', channelRes.data);
+      
+      // Then try to get pickup locations
       const accountRes = await axios.get("https://apiv2.shiprocket.in/v1/external/settings/company/pickup", {
         headers: { Authorization: `Bearer ${shiprocketToken}` }
       });
