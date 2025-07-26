@@ -55,7 +55,7 @@ export async function createShiprocketOrder(orderData) {
       const accountRes = await axios.get("https://apiv2.shiprocket.in/v1/external/settings/company/pickup", {
         headers: { Authorization: `Bearer ${shiprocketToken}` }
       });
-      console.log('Account verification successful. Pickup locations:', accountRes.data);
+      console.log('Account verification successful. Pickup locations:', JSON.stringify(accountRes.data, null, 2));
     } catch (verifyErr) {
       console.error('Account verification failed:', verifyErr.response?.data || verifyErr.message);
       throw verifyErr;
