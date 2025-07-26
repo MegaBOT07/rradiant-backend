@@ -86,7 +86,7 @@ router.post('/create-cod-order', authenticate, async (req, res) => {
       const shiprocketOrderData = {
         order_id: newOrder.orderId,
         order_date: new Date().toISOString().slice(0, 10),
-        pickup_location: "GAURAV SONI", // Company name as pickup location
+        pickup_location: "gaurav", // Exact match with Shiprocket pickup location name
         billing_customer_name: customerDetails.name,
         billing_last_name: "", // Not collected
         billing_address: customerDetails.address,
