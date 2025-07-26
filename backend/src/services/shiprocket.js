@@ -55,7 +55,14 @@ export async function createShiprocketOrder(orderData) {
       const accountRes = await axios.get("https://apiv2.shiprocket.in/v1/external/settings/company/pickup", {
         headers: { Authorization: `Bearer ${shiprocketToken}` }
       });
-      console.log('Account verification successful. Pickup locations:', JSON.stringify(accountRes.data, null, 2));
+      console.log('Account verification successful. Your pickup locations:', 
+        JSON.stringify(accountRes.data.data.shipping_address.map(addr => ({
+          pickup_location: addr.pickup_location,
+          address: addr.address,
+          city: addr.city,
+          state: addr.state,
+          pin_code: addr.pin_code
+        })), null, 2));
     } catch (verifyErr) {
       console.error('Account verification failed:', verifyErr.response?.data || verifyErr.message);
       throw verifyErr;
@@ -72,6 +79,10 @@ export async function createShiprocketOrder(orderData) {
       orderData,
       { headers: { Authorization: `Bearer ${shiprocketToken}` } }
     );
+    if (res.data.message && res.data.message.includes('Wrong Pickup location')) {
+      console.log('Available pickup locations:', JSON.stringify(res.data.data.data, null, 2));
+      throw new Error(`Wrong pickup location. Available locations are shown above.`);
+    }
     console.log('Shiprocket order created successfully:', res.data);
     return res.data;
   } catch (err) {
