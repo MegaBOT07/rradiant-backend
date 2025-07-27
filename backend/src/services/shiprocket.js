@@ -1,4 +1,5 @@
 import axios from "axios";
+import mongoose from 'mongoose';
 
 let shiprocketToken = null;
 
@@ -109,12 +110,19 @@ export async function createShiprocketOrder(orderData) {
 }
 
 // Track order in Shiprocket
-export async function trackShiprocketOrder(awbCode) {
+export async function trackShiprocketOrder(orderId) {
   if (!shiprocketToken) await loginToShiprocket();
   
   try {
+    // First get the order from our database to get Shiprocket's order ID
+    const order = await mongoose.model('Order').findOne({ orderId: orderId });
+    if (!order) {
+      throw new Error('Order not found');
+    }
+    
+    // Get tracking info using Shiprocket's order ID
     const res = await axios.get(
-      `https://apiv2.shiprocket.in/v1/external/courier/track/awb/${awbCode}`,
+      `https://apiv2.shiprocket.in/v1/external/orders/show/${order.shiprocketOrderId}`,
       { headers: { Authorization: `Bearer ${shiprocketToken}` } }
     );
     console.log('Shiprocket tracking response:', res.data);
