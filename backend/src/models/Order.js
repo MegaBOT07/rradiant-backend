@@ -32,6 +32,14 @@ const orderSchema = new mongoose.Schema({
   trackingNumber: { type: String },
   carrier: { type: String },
   trackingUrl: { type: String },
+  shiprocketShipmentId: { type: String },
+  shiprocketOrderId: { type: String },
+  statusHistory: [{
+    status: { type: String },
+    timestamp: { type: Date, default: Date.now },
+    location: { type: String },
+    comment: { type: String }
+  }],
 }, { timestamps: true });
 
 export default mongoose.model('Order', orderSchema); 

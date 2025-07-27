@@ -115,6 +115,15 @@ router.post('/create-cod-order', authenticate, async (req, res) => {
       newOrder.carrier = shiprocketRes.courier_company_id || shiprocketRes.data?.courier_company_id;
       newOrder.trackingUrl = shiprocketRes.shipment_id ? `https://app.shiprocket.in/orders/${shiprocketRes.shipment_id}` : '';
       newOrder.shiprocketShipmentId = shiprocketRes.shipment_id || shiprocketRes.data?.shipment_id;
+      newOrder.shiprocketOrderId = shiprocketRes.order_id || shiprocketRes.data?.order_id;
+      
+      // Add initial status to history
+      newOrder.statusHistory.push({
+        status: 'Pending',
+        timestamp: new Date(),
+        comment: 'Order placed successfully'
+      });
+      
       await newOrder.save();
     } catch (err) {
       console.error('Shiprocket order creation failed:', err?.response?.data || err);
@@ -182,7 +191,7 @@ router.post('/verify', authenticate, async (req, res) => {
         const shiprocketOrderData = {
           order_id: newOrder.orderId,
           order_date: new Date().toISOString().slice(0, 10),
-          pickup_location: "Default",
+          pickup_location: "gaurav", // Exact match with Shiprocket pickup location name
           billing_customer_name: customerDetails.name,
           billing_last_name: "",
           billing_address: customerDetails.address,
@@ -211,6 +220,15 @@ router.post('/verify', authenticate, async (req, res) => {
         newOrder.carrier = shiprocketRes.courier_company_id || shiprocketRes.data?.courier_company_id;
         newOrder.trackingUrl = shiprocketRes.shipment_id ? `https://app.shiprocket.in/orders/${shiprocketRes.shipment_id}` : '';
         newOrder.shiprocketShipmentId = shiprocketRes.shipment_id || shiprocketRes.data?.shipment_id;
+        newOrder.shiprocketOrderId = shiprocketRes.order_id || shiprocketRes.data?.order_id;
+        
+        // Add initial status to history
+        newOrder.statusHistory.push({
+          status: 'Paid',
+          timestamp: new Date(),
+          comment: 'Payment verified and order confirmed'
+        });
+        
         await newOrder.save();
       } catch (err) {
         console.error('Shiprocket order creation failed:', err?.response?.data || err);

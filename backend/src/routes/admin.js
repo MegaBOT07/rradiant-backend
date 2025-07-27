@@ -2,6 +2,7 @@ import express from 'express';
 import Order from '../models/Order.js';
 import User from '../models/User.js';
 import Product from '../models/Product.js';
+import { syncOrderStatusFromShiprocket, cancelShiprocketOrder } from '../services/shiprocket.js';
 
 const router = express.Router();
 
@@ -53,20 +54,80 @@ router.put('/orders/:id/status', async (req, res) => {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
-    const updatedOrder = await Order.findByIdAndUpdate(
-      id,
-      { orderStatus: status },
-      { new: true }
-    );
-
-    if (!updatedOrder) {
+    const order = await Order.findById(id);
+    if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
+
+    // If cancelling order, also cancel in Shiprocket
+    if (status === 'Cancelled' && order.shiprocketOrderId) {
+      try {
+        await cancelShiprocketOrder([order.shiprocketOrderId]);
+        console.log('Order cancelled in Shiprocket successfully');
+        
+        // Restore stock
+        for (const item of order.items) {
+          await Product.findByIdAndUpdate(item.productId, {
+            $inc: { stock: item.quantity }
+          });
+        }
+      } catch (shiprocketError) {
+        console.error('Failed to cancel order in Shiprocket:', shiprocketError);
+        // Continue with local update
+      }
+    }
+
+    // Update order status
+    order.orderStatus = status;
+    order.statusHistory.push({
+      status: status,
+      timestamp: new Date(),
+      comment: 'Status updated by admin'
+    });
+
+    const updatedOrder = await order.save();
 
     res.json(updatedOrder);
   } catch (err) {
     console.error('Error updating order status:', err);
     res.status(500).json({ message: 'Failed to update order status' });
+  }
+});
+
+// Sync order status with Shiprocket
+router.post('/orders/:id/sync', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findById(id);
+    
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (!order.shiprocketShipmentId) {
+      return res.status(400).json({ message: 'No Shiprocket shipment ID found for this order' });
+    }
+
+    const syncData = await syncOrderStatusFromShiprocket(order.shiprocketShipmentId);
+    
+    if (syncData && syncData.status !== order.orderStatus) {
+      order.orderStatus = syncData.status;
+      order.statusHistory.push({
+        status: syncData.status,
+        timestamp: syncData.lastUpdated,
+        comment: `Status synced from Shiprocket: ${syncData.shiprocketStatus}`
+      });
+      await order.save();
+    }
+
+    res.json({ 
+      message: 'Order status synced successfully',
+      order,
+      syncData
+    });
+  } catch (err) {
+    console.error('Error syncing order status:', err);
+    res.status(500).json({ message: 'Failed to sync order status' });
   }
 });
 

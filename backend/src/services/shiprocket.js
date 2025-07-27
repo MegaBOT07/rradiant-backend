@@ -97,13 +97,152 @@ export async function createShiprocketOrder(orderData) {
       );
       return res.data;
     }
-    
     if (err.response) {
       console.error('Shiprocket API Error:', {
         status: err.response.status,
         data: err.response.data,
         headers: err.response.headers
       });
+    }
+    throw err;
+  }
+}
+
+// Track order in Shiprocket
+export async function trackShiprocketOrder(awbCode) {
+  if (!shiprocketToken) await loginToShiprocket();
+  
+  try {
+    const res = await axios.get(
+      `https://apiv2.shiprocket.in/v1/external/courier/track/awb/${awbCode}`,
+      { headers: { Authorization: `Bearer ${shiprocketToken}` } }
+    );
+    console.log('Shiprocket tracking response:', res.data);
+    return res.data;
+  } catch (err) {
+    // If token expired, re-login and retry once
+    if (err.response && err.response.status === 401) {
+      console.log('Token expired, attempting to re-login...');
+      await loginToShiprocket();
+      const res = await axios.get(
+        `https://apiv2.shiprocket.in/v1/external/courier/track/awb/${awbCode}`,
+        { headers: { Authorization: `Bearer ${shiprocketToken}` } }
+      );
+      return res.data;
+    }
+    
+    if (err.response) {
+      console.error('Shiprocket tracking error:', err.response.data);
+    }
+    throw err;
+  }
+}
+
+// Cancel order in Shiprocket
+export async function cancelShiprocketOrder(orderIds) {
+  if (!shiprocketToken) await loginToShiprocket();
+  
+  try {
+    const res = await axios.post(
+      "https://apiv2.shiprocket.in/v1/external/orders/cancel",
+      { ids: orderIds },
+      { headers: { Authorization: `Bearer ${shiprocketToken}` } }
+    );
+    console.log('Shiprocket cancellation response:', res.data);
+    return res.data;
+  } catch (err) {
+    // If token expired, re-login and retry once
+    if (err.response && err.response.status === 401) {
+      console.log('Token expired, attempting to re-login...');
+      await loginToShiprocket();
+      const res = await axios.post(
+        "https://apiv2.shiprocket.in/v1/external/orders/cancel",
+        { ids: orderIds },
+        { headers: { Authorization: `Bearer ${shiprocketToken}` } }
+      );
+      return res.data;
+    }
+    
+    if (err.response) {
+      console.error('Shiprocket cancellation error:', err.response.data);
+    }
+    throw err;
+  }
+}
+
+// Get order status from Shiprocket
+export async function getShiprocketOrderStatus(orderIds) {
+  if (!shiprocketToken) await loginToShiprocket();
+  
+  try {
+    const res = await axios.get(
+      `https://apiv2.shiprocket.in/v1/external/orders/show/${orderIds}`,
+      { headers: { Authorization: `Bearer ${shiprocketToken}` } }
+    );
+    console.log('Shiprocket order status response:', res.data);
+    return res.data;
+  } catch (err) {
+    // If token expired, re-login and retry once
+    if (err.response && err.response.status === 401) {
+      console.log('Token expired, attempting to re-login...');
+      await loginToShiprocket();
+      const res = await axios.get(
+        `https://apiv2.shiprocket.in/v1/external/orders/show/${orderIds}`,
+        { headers: { Authorization: `Bearer ${shiprocketToken}` } }
+      );
+      return res.data;
+    }
+    
+    if (err.response) {
+      console.error('Shiprocket order status error:', err.response.data);
+    }
+    throw err;
+  }
+}
+
+// Synchronize order status from Shiprocket
+export async function syncOrderStatusFromShiprocket(shipmentId) {
+  if (!shiprocketToken) await loginToShiprocket();
+  
+  try {
+    const res = await axios.get(
+      `https://apiv2.shiprocket.in/v1/external/courier/track/shipment/${shipmentId}`,
+      { headers: { Authorization: `Bearer ${shiprocketToken}` } }
+    );
+    
+    if (res.data && res.data.tracking_data) {
+      const trackingData = res.data.tracking_data;
+      const currentStatus = trackingData.track_status;
+      
+      // Map Shiprocket status to our status
+      const statusMapping = {
+        'NEW': 'Pending',
+        'PKP': 'Processing', // Pickup
+        'OFD': 'Shipped', // Out for delivery
+        'DEL': 'Delivered', // Delivered
+        'RTO': 'Cancelled', // Return to origin
+        'CNF': 'Cancelled', // Cancelled
+        'UND': 'Cancelled', // Undelivered
+      };
+      
+      return {
+        status: statusMapping[currentStatus] || 'Processing',
+        shiprocketStatus: currentStatus,
+        trackingHistory: trackingData.shipment_track || [],
+        lastUpdated: new Date()
+      };
+    }
+    
+    return null;
+  } catch (err) {
+    if (err.response && err.response.status === 401) {
+      console.log('Token expired, attempting to re-login...');
+      await loginToShiprocket();
+      return await syncOrderStatusFromShiprocket(shipmentId);
+    }
+    
+    if (err.response) {
+      console.error('Shiprocket sync error:', err.response.data);
     }
     throw err;
   }

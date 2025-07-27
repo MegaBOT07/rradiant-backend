@@ -4,6 +4,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { authenticate as auth } from '../middleware/auth.js'; // Import the correct middleware and alias it
 import nodemailer from 'nodemailer';
+import { trackShiprocketOrder, cancelShiprocketOrder, syncOrderStatusFromShiprocket } from '../services/shiprocket.js';
 
 const router = express.Router();
 
@@ -83,8 +84,35 @@ router.post('/orders/:orderId/cancel', auth, async (req, res) => {
     if (["Shipped", "Delivered", "Cancelled"].includes(order.orderStatus)) {
       return res.status(400).json({ message: 'Order cannot be cancelled at this stage.' });
     }
+
+    // Cancel in Shiprocket if order was created there
+    if (order.shiprocketOrderId) {
+      try {
+        await cancelShiprocketOrder([order.shiprocketOrderId]);
+        console.log('Order cancelled in Shiprocket successfully');
+      } catch (shiprocketError) {
+        console.error('Failed to cancel order in Shiprocket:', shiprocketError);
+        // Continue with local cancellation even if Shiprocket fails
+      }
+    }
+
+    // Update order status
     order.orderStatus = 'Cancelled';
+    order.statusHistory.push({
+      status: 'Cancelled',
+      timestamp: new Date(),
+      comment: 'Order cancelled by customer'
+    });
+    
     await order.save();
+
+    // Restore stock
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(item.productId, {
+        $inc: { stock: item.quantity }
+      });
+    }
+
     res.json({ message: 'Order cancelled successfully', order });
   } catch (err) {
     console.error('Error cancelling order:', err);
@@ -259,7 +287,13 @@ router.post('/track', async (req, res) => {
       return res.status(400).json({ message: 'Order ID and email are required' });
     }
 
-    const order = await Order.findOne({ orderId: orderId });
+    const order = await Order.findOne({ 
+      $or: [
+        { orderId: orderId },
+        { orderNumber: orderId },
+        { _id: orderId }
+      ]
+    });
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -270,23 +304,56 @@ router.post('/track', async (req, res) => {
       return res.status(404).json({ message: 'Order not found' }); // Generic message for security
     }
 
-    if (!order.trackingNumber) {
-      return res.status(404).json({ message: 'No tracking number found for this order' });
+    // Sync with Shiprocket if shipment ID exists
+    if (order.shiprocketShipmentId) {
+      try {
+        const syncData = await syncOrderStatusFromShiprocket(order.shiprocketShipmentId);
+        if (syncData && syncData.status !== order.orderStatus) {
+          // Update order status from Shiprocket
+          order.orderStatus = syncData.status;
+          order.statusHistory.push({
+            status: syncData.status,
+            timestamp: syncData.lastUpdated,
+            comment: `Status synced from Shiprocket: ${syncData.shiprocketStatus}`
+          });
+          await order.save();
+        }
+      } catch (syncError) {
+        console.error('Failed to sync with Shiprocket:', syncError);
+        // Continue with existing data if sync fails
+      }
     }
 
-    // RocketShip API integration (placeholder)
-    // Replace with actual API call and credentials
-    const rocketShipTracking = {
+    // Get detailed tracking from Shiprocket if available
+    let trackingDetails = null;
+    if (order.trackingNumber) {
+      try {
+        trackingDetails = await trackShiprocketOrder(order.trackingNumber);
+      } catch (trackingError) {
+        console.error('Failed to get tracking details:', trackingError);
+      }
+    }
+
+    const response = {
+      orderId: order.orderId,
+      orderNumber: order.orderNumber,
+      status: order.orderStatus,
       tracking_number: order.trackingNumber,
       carrier: order.carrier,
       tracking_url: order.trackingUrl,
-      status: 'In Transit',
-      history: [
-        { date: order.createdAt, status: 'Order Placed' },
-        { date: order.updatedAt, status: 'In Transit' }
-      ]
+      shiprocket_url: order.shiprocketShipmentId ? `https://app.shiprocket.in/orders/${order.shiprocketShipmentId}` : null,
+      created_at: order.createdAt,
+      updated_at: order.updatedAt,
+      history: order.statusHistory.map(h => ({
+        status: h.status,
+        date: h.timestamp,
+        location: h.location,
+        description: h.comment
+      })),
+      shiprocket_tracking: trackingDetails
     };
-    res.json(rocketShipTracking);
+
+    res.json(response);
   } catch (err) {
     console.error('Error tracking order:', err);
     res.status(500).json({ message: 'Failed to track order' });
