@@ -6,6 +6,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { authenticate } from '../middleware/auth.js';
 import { createShiprocketOrder } from '../services/shiprocket.js';
+import { generateUniversalOrderId } from '../utils/orderIdGenerator.js';
 
 const router = express.Router();
 
@@ -58,14 +59,16 @@ router.post('/create-order', authenticate, async (req, res) => {
 // Create COD order
 router.post('/create-cod-order', authenticate, async (req, res) => {
   const { cart, totalAmount, customerDetails } = req.body;
-  const uniqueId = Date.now();
-  const orderId = `COD-${uniqueId}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-  const orderNumber = uniqueId.toString().slice(-6); // A simple, likely-unique order number
+  
+  // Generate universal order ID
+  const universalOrder = generateUniversalOrderId();
+  const orderId = universalOrder.orderId;
+  const orderNumber = universalOrder.orderNumber;
 
   try {
     const newOrder = new Order({
       orderId,
-      orderNumber, // Add the new order number here
+      orderNumber,
       items: cart.map(item => ({
         productId: item._id,
         quantity: item.quantity,
@@ -84,7 +87,7 @@ router.post('/create-cod-order', authenticate, async (req, res) => {
     // Shiprocket API integration
     try {
       const shiprocketOrderData = {
-        order_id: newOrder.orderId,
+        order_id: orderId, // Use the universal order ID
         order_date: new Date().toISOString().slice(0, 10),
         pickup_location: "gaurav", // Exact match with Shiprocket pickup location name
         billing_customer_name: customerDetails.name,
@@ -163,13 +166,14 @@ router.post('/verify', authenticate, async (req, res) => {
 
   if (digest === razorpay_signature) {
     try {
-      // Generate orderNumber
-      const uniqueId = Date.now();
-      const orderNumber = uniqueId.toString().slice(-6);
+      // Generate universal order ID
+      const universalOrder = generateUniversalOrderId();
+      const orderId = universalOrder.orderId;
+      const orderNumber = universalOrder.orderNumber;
 
       // Create the order in DB
       const newOrder = new Order({
-        orderId: razorpay_order_id,
+        orderId, // Use universal order ID instead of razorpay_order_id
         orderNumber,
         items: cart.map(item => ({
           productId: item._id,
@@ -181,7 +185,8 @@ router.post('/verify', authenticate, async (req, res) => {
         totalAmount,
         customerDetails,
         paymentStatus: 'Paid',
-        paymentId: razorpay_payment_id
+        paymentId: razorpay_payment_id, // Keep razorpay payment ID for reference
+        razorpayOrderId: razorpay_order_id // Store razorpay order ID separately for reference
       });
 
       await newOrder.save();
@@ -189,9 +194,9 @@ router.post('/verify', authenticate, async (req, res) => {
       // Shiprocket API integration
       try {
         const shiprocketOrderData = {
-          order_id: newOrder.orderId,
+          order_id: orderId, // Use the universal order ID
           order_date: new Date().toISOString().slice(0, 10),
-          pickup_location: "gaurav", // Exact match with Shiprocket pickup location name
+          pickup_location: "gaurav",
           billing_customer_name: customerDetails.name,
           billing_last_name: "",
           billing_address: customerDetails.address,
@@ -241,7 +246,7 @@ router.post('/verify', authenticate, async (req, res) => {
         });
       }
 
-      res.json({ status: 'success', orderId: razorpay_order_id, trackingNumber: newOrder.trackingNumber, carrier: newOrder.carrier, trackingUrl: newOrder.trackingUrl });
+      res.json({ status: 'success', orderId: orderId, orderNumber: orderNumber, trackingNumber: newOrder.trackingNumber, carrier: newOrder.carrier, trackingUrl: newOrder.trackingUrl });
     } catch (error) {
       console.error('Error verifying payment and creating order:', error);
       res.status(500).json({ message: 'Internal Server Error' });

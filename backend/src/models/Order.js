@@ -23,6 +23,7 @@ const orderSchema = new mongoose.Schema({
     zip: { type: String, required: true },
   },
   paymentId: { type: String },
+  razorpayOrderId: { type: String }, // Store Razorpay order ID separately for reference
   paymentStatus: { type: String, default: 'Pending' }, // e.g., 'Pending', 'Paid', 'Failed'
   orderStatus: { 
     type: String, 

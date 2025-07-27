@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
@@ -291,7 +292,8 @@ router.post('/track', async (req, res) => {
       $or: [
         { orderId: orderId },
         { orderNumber: orderId },
-        { _id: orderId }
+        { _id: mongoose.Types.ObjectId.isValid(orderId) ? orderId : null },
+        { razorpayOrderId: orderId } // Also search by razorpay order ID for backward compatibility
       ]
     });
 
